@@ -6,27 +6,13 @@ on:
       - 'main'
 
 jobs:
-  bump-version:
-    name: 'Bump Version on main'
+  tag:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        node-version:
+        - 12
     steps:
-      - name: 'Checkout source code'
-        uses: 'actions/checkout@v2'
-        with:
-          ref: ${{ github.ref }}
-      - name: 'cat package.json'
-        run: cat ./package.json
-      - name: 'Automated Version Bump'
-        id: version-bump
-        uses: 'phips28/gh-action-bump-version@v9.0.0'
-        with:
-          tag-prefix: 'v'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-      - name: 'cat package.json'
-        run: cat ./package.json
-      - name: 'Output Step'
-        env:
-          NEW_TAG: ${{ steps.version-bump.outputs.newTag }}
-        run: echo "new tag $NEW_TAG"
+    - uses: phish108/autotag-action@v1.1.55
+      with:
+        github-token: ${{ secrets.GH_TOKEN}}
