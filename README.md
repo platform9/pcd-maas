@@ -9,3 +9,6 @@ This repo has branch protection enabled for the main branch. This means that all
 Use `#major`, `#minor`, or `#patch` tags in your commit messages and autotagger will increase your version tags accordingly.
 
 The repo also uses copilot to automatically lint and suggest changes to the code in all commits. The action is configured to run on every push to the main branch and will auto run on all PRs.
+
+
+This is a test change to the repo
