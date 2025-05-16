@@ -1,3 +1,7 @@
+# Continuous Integration for this project is done using GitHub Actions.
+
+More info is [here](./CI.md)
+
 # Adding and deploying a machine to MAAS server, then PCD joining with an automated script 
  
 
