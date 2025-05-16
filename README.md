@@ -1,4 +1,4 @@
-# Continuous  Integration for this project is done using GitHub Actions.
+# Continuous Integration for this project is done using GitHub Actions.
 
 More info is [here](./CI.md)
 
