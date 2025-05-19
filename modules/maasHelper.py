@@ -131,7 +131,7 @@ def configure_and_deploy(maas_user, hostname, system_id, row, cloud_init_templat
         temp_cloud_init_dir = os.path.join(current_dir, "maas-cloud-init")
         os.makedirs(temp_cloud_init_dir, exist_ok=True)
         temp_cloud_init = f"{temp_cloud_init_dir}/cloud-init-{hostname}.yaml"
-        generate_cloud_init(cloud_init_template, temp_cloud_init, row["IP"], row["storage_ip"])
+        generate_cloud_init(cloud_init_template, temp_cloud_init, row["ip"], row["storage_ip"])
         try:
             deploy_command = f'maas {maas_user} machine deploy {system_id} user_data="$(base64 -w 0 {temp_cloud_init})"'
             subprocess.run(deploy_command, shell=True, check=True, capture_output=True, text=True)
