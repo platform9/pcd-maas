@@ -34,7 +34,7 @@ def setup_logger(log_name="maas_logger", log_dir="deploy_logs", log_file="maas_d
 
     return logger
 
-def add_machines_from_csv(csv_file,maas_user,max_workers,cloud_init_template,preserve_cloud_init, logger):
+def add_machines_from_csv(csv_file,maas_user,max_workers,cloud_init_template,preserve_cloud_init,ssh_user, logger):
     try:
         with open(csv_file, newline='') as csvfile:
             reader = csv.DictReader(csvfile)
@@ -47,7 +47,7 @@ def add_machines_from_csv(csv_file,maas_user,max_workers,cloud_init_template,pre
 
         # Deploy machines
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            executor.map(lambda args: configure_and_deploy(maas_user, *args, cloud_init_template,preserve_cloud_init,logger), results)
+            executor.map(lambda args: configure_and_deploy(maas_user, *args, cloud_init_template,preserve_cloud_init,ssh_user,logger), results)
         
         save_csv(csv_file,rows,logger)
 
@@ -79,6 +79,11 @@ def wait_for_status(maas_user, system_id, expected_status, hostname,logger, time
 def generate_cloud_init(template_file, output_file, ip, storage_ip):
     with open(template_file, 'r') as f:
         template = Template(f.read())
+    values = {"ip": ip}
+    if storage_ip:
+        values["storage_ip"] = storage_ip
+
+    rendered = template.safe_substitute(values)
     rendered = template.safe_substitute(ip=ip, storage_ip=storage_ip)
     with open(output_file, 'w') as f:
         f.write(rendered)
@@ -120,7 +125,7 @@ def create_machine(maas_user, row,logger):
         logger.error(f"STDOUT: {e.stdout.strip()}")
         return hostname, None, row
 
-def configure_and_deploy(maas_user, hostname, system_id, row, cloud_init_template,preserve_cloud_init,logger):
+def configure_and_deploy(maas_user, hostname, system_id, row, cloud_init_template,preserve_cloud_init,ssh_user,logger):
     if not system_id:
         logger.warning(f"[{hostname}] Skipping: no system_id.")
         row["deployment_status"] = "System ID Missing Machine Was Not Created"
@@ -131,7 +136,8 @@ def configure_and_deploy(maas_user, hostname, system_id, row, cloud_init_templat
         temp_cloud_init_dir = os.path.join(current_dir, "maas-cloud-init")
         os.makedirs(temp_cloud_init_dir, exist_ok=True)
         temp_cloud_init = f"{temp_cloud_init_dir}/cloud-init-{hostname}.yaml"
-        generate_cloud_init(cloud_init_template, temp_cloud_init, row["ip"], row["storage_ip"])
+        storage_ip = row["storage_ip"] if "storage_ip" in row else None
+        generate_cloud_init(cloud_init_template, temp_cloud_init, row["ip"], storage_ip)
         try:
             deploy_command = f'maas {maas_user} machine deploy {system_id} user_data="$(base64 -w 0 {temp_cloud_init})"'
             subprocess.run(deploy_command, shell=True, check=True, capture_output=True, text=True)
@@ -147,15 +153,43 @@ def configure_and_deploy(maas_user, hostname, system_id, row, cloud_init_templat
         if wait_for_status(maas_user, system_id, "Deployed", hostname,logger, 1200, 60):
             logger.info(f"[{hostname}] Deployment completed.")
             update_ipmi_user(system_id, hostname,maas_user, row)
-            row["deployment_status"] = "Deployed"
+            logger.info(f"[{hostname}] checking connectivity.")
+            time.sleep(10)
+            check_ssh_connection(row,ssh_user,hostname,logger)
         else:
             logger.warning(f"[{hostname}] Did not reach Deployed state.")
             row["deployment_status"] = "Deployment Timeout"
         if preserve_cloud_init == "no" and os.path.exists(temp_cloud_init):
-            os.remove(temp_cloud_init)
+            try:
+                os.remove(temp_cloud_init)
+            except Exception as e:
+                logger.warning(f"Failed to remove temp cloud-init file: {e}")
     else:
         logger.warning(f"[{hostname}] Not Ready. Skipping deployment.")
         row["deployment_status"] = "Not Ready,Commissioning Was Not Done"
+
+def check_ssh_connection(row,ssh_user,hostname,logger):
+    ip = row.get("ip")
+    home = os.getenv("HOME")
+    ssh_private_key_file = f"{home}/.ssh/id_rsa"
+    # Try SSH connectivity
+    ssh_command = [
+        "ssh", "-o", "StrictHostKeyChecking=no",
+        "-o", "ConnectTimeout=30",
+        "-i", ssh_private_key_file,
+        f"{ssh_user}@{ip}", "echo", "SSH_OK"
+        ]
+    try:
+        result = subprocess.run(ssh_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode == 0 and "SSH_OK" in result.stdout:
+            logger.info(f"[{hostname}] SSH connectivity verified.")
+            row["deployment_status"] = "Deployed"
+        else:
+            logger.warning(f"[{hostname}] SSH check failed. Marking as Unreachable.")
+            row["deployment_status"] = "Deployed-Unreachable"
+    except Exception as e:
+            logger.error(f"[{hostname}] SSH attempt raised an exception: {e}")
+            row["deployment_status"] = "Deployed-Unreachable"
 
 def update_ipmi_user(system_id, hostname,maas_user, row):
     power_params = json.dumps({
