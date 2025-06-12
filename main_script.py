@@ -51,11 +51,10 @@ maasHelper.add_machines_from_csv(
     args.max_workers,
     args.cloud_init_template,
     args.preserve_cloud_init,
+    args.ssh_user,
     logger
 )
 
-logger.info("Waiting 20 seconds for the machines and their interfaces to be up before starting onboarding...")
-time.sleep(20)
 ###############################################################################
 #                      Load CSV rows and filter deployed                      #
 ###############################################################################
