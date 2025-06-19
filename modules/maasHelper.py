@@ -154,8 +154,17 @@ def configure_and_deploy(maas_user, hostname, system_id, row, cloud_init_templat
             logger.info(f"[{hostname}] Deployment completed.")
             update_ipmi_user(system_id, hostname,maas_user, row)
             logger.info(f"[{hostname}] checking connectivity.")
-            time.sleep(10)
-            check_ssh_connection(row,ssh_user,hostname,logger)
+            max_wait = 30  
+            interval = 5   
+            elapsed = 0
+            while elapsed < max_wait:
+                if check_ssh_connection(row, ssh_user, hostname, logger):
+                    break
+                time.sleep(interval)
+                elapsed += interval
+            else:
+                logger.warning(f"[{hostname}] SSH connectivity check failed after {max_wait}s.")
+                row["deployment_status"] = "Deployed-Unreachable"
         else:
             logger.warning(f"[{hostname}] Did not reach Deployed state.")
             row["deployment_status"] = "Deployment Timeout"
@@ -184,12 +193,13 @@ def check_ssh_connection(row,ssh_user,hostname,logger):
         if result.returncode == 0 and "SSH_OK" in result.stdout:
             logger.info(f"[{hostname}] SSH connectivity verified.")
             row["deployment_status"] = "Deployed"
+            return True
         else:
-            logger.warning(f"[{hostname}] SSH check failed. Marking as Unreachable.")
-            row["deployment_status"] = "Deployed-Unreachable"
+            logger.info(f"[{hostname}] SSH not ready yet. Retrying...")
+            return False
     except Exception as e:
-            logger.error(f"[{hostname}] SSH attempt raised an exception: {e}")
-            row["deployment_status"] = "Deployed-Unreachable"
+        logger.info(f"[{hostname}] SSH check raised exception: {e}. Retrying...")
+        return False
 
 def update_ipmi_user(system_id, hostname,maas_user, row):
     power_params = json.dumps({
