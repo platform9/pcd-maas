@@ -25,6 +25,7 @@ Script directory structure:
  ├── machines_tempalte.csv
  ├── vars_template.j2
  ├── main_script.py
+ ├── lv_config_template.json 
  ├── modules
  │   ├── maasHelper.py  ---> add and deploy machines to MAAS
  │   ├── onboard.py     ---> onboard machines to PCD
@@ -74,10 +75,14 @@ Script directory structure:
 
        1. machines_template.csv
           ```bash
-          hostname,architecture,mac_addresses,power_type,power_user,power_pass,power_driver,power_address,cipher_suite_id,power_boot_type,privilege_level,k_g,ip,storage_ip
-          pf9-test001,amd64/generic,3c:fd:fe:b5:1a:8d,ipmi,admin,password,LAN_2_0,172.25.1.11,3,auto,ADMIN,,192.168.125.167,192.168.125.165
-          pf9-test002,amd64/generic,3c:fd:fe:b5:1a:8d,ipmi,admin,password,LAN_2_0,172.25.1.12,3,auto,ADMIN,,192.168.125.168,192.168.125.166
+          hostname,architecture,mac_addresses,power_type,power_user,power_pass,power_driver,power_address,cipher_suite_id,power_boot_type,privilege_level,k_g,ip,storage_ip,cloud_init
+          pf9-test001,amd64/generic,3c:fd:fe:b5:1a:8d,ipmi,admin,password,LAN_2_0,172.25.1.11,3,auto,ADMIN,,192.168.125.167,192.168.125.165,cloud_init.yaml
+          pf9-test002,amd64/generic,3c:fd:fe:b5:1a:8d,ipmi,admin,password,LAN_2_0,172.25.1.12,3,auto,ADMIN,,192.168.125.168,192.168.125.166,cloud_init2.yaml
           ```
+          optional fields:
+            1. storage_ip
+            2. cloud_init :  In case you want to provide a different cloud-init template per server, you can add it in the CSV file instead of passing it as an argument via command line.
+
        3. cloud-init-template.yaml
           - The only requirement for this file is to have the IP and the storage_ip  as a placeholder to be filled in dynamically for each machine 
           ```bash
@@ -131,7 +136,29 @@ Script directory structure:
                           - 8.8.8.8 
                           - 1.1.1.1 
           ``` 
-          
+        4. lv_config_template.json (in case the --storage_layout flag is set to yes)
+        ```bash
+          {
+          "vg_group": "rootvg", # the name for the vg group
+          "boot_efi_size": "1G", 
+          "boot_size": "3G",
+          "volumes": [
+            {"name": "home", "size": "10G" , "fs_type": "xfs" , "mount_point": "/home"},
+            {"name": "opt", "size": "10G" , "fs_type": "xfs" , "mount_point": "/opt"},
+            {"name": "opt-pf9", "size": "10G" , "fs_type": "xfs" , "mount_point": "/opt/pf9"},
+            {"name": "swap", "size": "3G" , "fs_type": "" , "mount_point": ""} ,
+            {"name": "tmp", "size": "10G" , "fs_type": "xfs" , "mount_point": "/tmp"},
+            {"name": "usr-openv", "size": "30G" , "fs_type": "xfs" , "mount_point": "/usr/openv"},
+            {"name": "var", "size": "20G" , "fs_type": "xfs" , "mount_point": "/var"},
+            {"name": "var-log", "size": "20G" , "fs_type": "xfs" , "mount_point": "/var/log"},
+            {"name": "var-log-audit", "size": "20G"  , "fs_type": "xfs" , "mount_point": "/var/log/audit"},
+            {"name": "var-tmp", "size": "5G" , "fs_type": "xfs" , "mount_point": "/var/tmp"},
+            {"name": "root", "size": "20G" , "fs_type": "xfs" , "mount_point": "/"}
+          ]
+        }
+
+        ```
+
   6. Ensure the SSH key for the MAAS server user (used to connect to deployed machines during onboarding) is added in the MAAS UI.
         
 #### Run the script:  
@@ -152,7 +179,7 @@ Script directory structure:
 What the options mean:
   - ```--maas_user```: MAAS admin username.
   - ```--csv_filename```: CSV file path.
-  - ```--cloud_init_template```: Cloud-init template YAML path.
+  - ```--cloud_init_template```:  Cloud-init template YAML path. If not provided, it will look for it in the CSV file.
   - ```--max_workers```: Maximum number of concurrent threads for provisioning.
   - ```--ssh_user```: SSH user for Ansible.
   - ```--setup_env```: By default, it's no, but for the first run on the maas machine, it should be yes to set up the necessary directories
@@ -163,7 +190,11 @@ There is an optional argument:
     ```bash
     /{script directory}/maas-cloud-init/cloud-init-{hostname}.yaml
     ```
-
+  - ```--storage_layout```: By default, it's no, but if set to yes will allow the storage script to run and create custome storage layout
+  - ```--storage_layout_template```: Required if --storage_layout is set to yes.
+  - ```--onprem```:  If the setup is on-prem, set this to yes.
+  - ```--controller_ip```:  Required if --onprem is set to yes.
+  
 Script directory structure after running the script:
 ```bash
  .
@@ -176,6 +207,7 @@ Script directory structure after running the script:
  ├── {your CSV file name}_updated.csv  ---> updated csv with the status of the deployment
  ├── vars_template.j2
  ├── vars.yaml                         ---> yaml file that will be used by the onboarding Ansible playbooks
+ ├── lv_config_template.json
  ├── main_script.py
  ├── modules
  │   ├── maasHelper.py  
@@ -191,18 +223,20 @@ Script directory structure after running the script:
 
 ##### 1. It will add the machines to MAAS and commission them.
 
-##### 2. Deploy the machines once the state is ready 
+##### 2. It will create the storage layout incase the flag was set to yes.
+
+##### 3. Deploy the machines once the state is ready 
 When in ready state, it will generate a cloud-init file for each machine with the IP specified for each one from the CSV file,it will be generated in the tmp directory,and then deploy the OS.
 ```bash
 /maas-cloud-init/cloud-init-{hostname}.yaml
 ```
 Those files will be deleted once the deployment is done, unless the flag preserve_cloud_init is set to yes
-##### 3. After the deployment is done and successful, the onboarding process will begin. 
+##### 4. After the deployment is done and successful, the onboarding process will begin. 
 After deployment, a new CSV file will be generated that contains all the previous info along with the deployment status to ensure that undeployed or uncommissioned machines don't go through the onboarding phase.
 ```bash
 {your CSV file name}_updated.csv
 ```
-##### 4. Will start by generating a vars.yaml file, which contains all the necessary information about each host, using Jinja2 
+##### 5. Will start by generating a vars.yaml file, which contains all the necessary information about each host, using Jinja2 
   - Loads a template (vars_template.j2) and fills it with the extracted data. 
   - Saves the rendered YAML to vars.yaml.
     
@@ -219,11 +253,12 @@ hosts:
       - "node_onboard"
 ``` 
 
-##### 5. Copying vars.yml to Ansible Playbook Directory 
+##### 6. Copying vars.yml to Ansible Playbook Directory 
 It will copy the vars file to user_resource_examples/templates/host_onboard_data.yaml.j2, where the Ansible playbooks will use this file  
 
 
-##### 6. Executing Ansible Playbooks for PCD Host Onboarding  
+##### 7. Executing Ansible Playbooks for PCD Host Onboarding  
+
 
 
 

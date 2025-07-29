@@ -1,5 +1,6 @@
 import os
 import csv
+import re
 import subprocess
 import sys
 from jinja2 import Environment, FileSystemLoader
@@ -53,7 +54,7 @@ def render_vars_yaml(current_dir, template_file, output_file, url, region, envir
         logger.error(f"Error rendering vars.yaml: {e}")
         sys.exit(1)
 
-def start_pcd_onboarding(csv_filename, ssh_user,portal, region, environment, url,setup_env, logger):
+def start_pcd_onboarding(csv_filename, ssh_user,portal, region, environment, url,setup_env,controller_ip,onprem, logger):
     current_dir = os.getcwd()
     output_file = os.path.join(current_dir, "vars.yaml")
     template_file = os.path.join(current_dir, "vars_template.j2")
@@ -62,9 +63,9 @@ def start_pcd_onboarding(csv_filename, ssh_user,portal, region, environment, url
     pcd_dir = os.path.join(current_dir, "pcd_ansible-pcd_develop")
     render_vars_yaml(current_dir, template_file, output_file, url, region, environment, hosts, logger)
     os.chdir(pcd_dir)
-    run_pcd_onboarding(portal, region, environment, url,output_file,setup_env, logger)
+    run_pcd_onboarding(portal, region, environment, url,output_file,setup_env,controller_ip,onprem, logger)
 
-def run_pcd_onboarding(portal, region, environment, url,output_file,setup_env, logger):
+def run_pcd_onboarding(portal, region, environment, url,output_file,setup_env,controller_ip,onprem, logger):
     
     try:
         
@@ -87,6 +88,18 @@ def run_pcd_onboarding(portal, region, environment, url,output_file,setup_env, l
             "-create-hostagents-configs", "yes"
         ], check=True)
 
+        if onprem: 
+            fqdn = url.removeprefix("https://").removesuffix("/")
+            fqdninfra = re.sub(r"-(.*?)\.", ".", fqdn, count=1)
+            subprocess.run([
+                './pcdExpress',
+                '-env-file', f'user_configs/{portal}/{region}/{portal}-{region}-{environment}-environment.yaml',
+                '-onprem', 'yes',
+                '-ip-addr', controller_ip,
+                '-fqdn', fqdn,
+                '-fqdninfra', fqdninfra
+            ], check=True)
+
         subprocess.run([
             "./pcdExpress",
             "-env-file", f"user_configs/{portal}/{region}/{portal}-{region}-{environment}-environment.yaml",
@@ -96,3 +109,4 @@ def run_pcd_onboarding(portal, region, environment, url,output_file,setup_env, l
     except subprocess.CalledProcessError as e:
         logger.error(f"Error during subprocess execution: {e}")
         sys.exit(1)
+
