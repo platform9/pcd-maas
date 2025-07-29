@@ -1,4 +1,3 @@
-
 import os
 import sys
 import csv
@@ -10,6 +9,7 @@ from datetime import datetime
 import subprocess
 from logging.handlers import RotatingFileHandler
 from concurrent.futures import ThreadPoolExecutor
+from modules import  storageLayout
 
 def setup_logger(log_name="maas_logger", log_dir="deploy_logs", log_file="maas_deployment.log"):
     os.makedirs(log_dir, exist_ok=True)
@@ -34,7 +34,7 @@ def setup_logger(log_name="maas_logger", log_dir="deploy_logs", log_file="maas_d
 
     return logger
 
-def add_machines_from_csv(csv_file,maas_user,max_workers,cloud_init_template,preserve_cloud_init,ssh_user, logger):
+def add_machines_from_csv(csv_file,maas_user,max_workers,cloud_init_template,preserve_cloud_init,ssh_user,storage_layout,storage_layout_template, logger):
     try:
         with open(csv_file, newline='') as csvfile:
             reader = csv.DictReader(csvfile)
@@ -47,7 +47,7 @@ def add_machines_from_csv(csv_file,maas_user,max_workers,cloud_init_template,pre
 
         # Deploy machines
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            executor.map(lambda args: configure_and_deploy(maas_user, *args, cloud_init_template,preserve_cloud_init,ssh_user,logger), results)
+            executor.map(lambda args: configure_and_deploy(maas_user, *args, cloud_init_template,preserve_cloud_init,ssh_user,storage_layout,storage_layout_template,logger), results)
         
         save_csv(csv_file,rows,logger)
 
@@ -125,18 +125,30 @@ def create_machine(maas_user, row,logger):
         logger.error(f"STDOUT: {e.stdout.strip()}")
         return hostname, None, row
 
-def configure_and_deploy(maas_user, hostname, system_id, row, cloud_init_template,preserve_cloud_init,ssh_user,logger):
+def configure_and_deploy(maas_user, hostname, system_id, row, cloud_init_template,preserve_cloud_init,ssh_user,storage_layout,storage_layout_template,logger):
     if not system_id:
         logger.warning(f"[{hostname}] Skipping: no system_id.")
         row["deployment_status"] = "System ID Missing Machine Was Not Created"
         return
 
-    if wait_for_status(maas_user, system_id, "Ready", hostname,logger, 600, 30):
+    if wait_for_status(maas_user, system_id, "Ready", hostname,logger, 700, 30):
+        if storage_layout == "yes":
+            storageLayout.create_storage_layout(system_id,hostname,storage_layout_template,logger)
         current_dir = os.getcwd()
         temp_cloud_init_dir = os.path.join(current_dir, "maas-cloud-init")
         os.makedirs(temp_cloud_init_dir, exist_ok=True)
         temp_cloud_init = f"{temp_cloud_init_dir}/cloud-init-{hostname}.yaml"
         storage_ip = row["storage_ip"] if "storage_ip" in row else None
+        if not cloud_init_template:
+            cloud_init_template = row.get("cloud_init")
+            if not cloud_init_template:
+                logger.error(f"[{hostname}] No cloud-init template provided via CSV. Skipping.")
+                row["deployment_status"] = "Cloud-init Template Missing"
+                return
+            if not os.path.isfile(cloud_init_template):
+                logger.error(f"[{hostname}] Cloud-init template file does not exist: {cloud_init_template}")
+                row["deployment_status"] = "Cloud-init Template Missing"
+                return
         generate_cloud_init(cloud_init_template, temp_cloud_init, row["ip"], storage_ip)
         try:
             deploy_command = f'maas {maas_user} machine deploy {system_id} user_data="$(base64 -w 0 {temp_cloud_init})"'
@@ -154,7 +166,7 @@ def configure_and_deploy(maas_user, hostname, system_id, row, cloud_init_templat
             logger.info(f"[{hostname}] Deployment completed.")
             update_ipmi_user(system_id, hostname,maas_user, row)
             logger.info(f"[{hostname}] checking connectivity.")
-            max_wait = 30  
+            max_wait = 60  
             interval = 5   
             elapsed = 0
             while elapsed < max_wait:
@@ -230,4 +242,5 @@ def save_csv(csv_file, rows, logger):
         logger.info(f"Updated CSV with deployment status at {new_csv_file}")
     except Exception as e:
         logger.error(f"Error writing to CSV: {str(e)}")
+
 
