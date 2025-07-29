@@ -135,31 +135,32 @@ Script directory structure:
                         addresses:  
                           - 8.8.8.8 
                           - 1.1.1.1 
-          ``` 
-        4. lv_config_template.json (in case the --storage_layout flag is set to yes)
-        ```bash
-          {
-          "vg_group": "rootvg", # the name for the vg group
-          "boot_efi_size": "1G", 
-          "boot_size": "3G",
-          "volumes": [
-            {"name": "home", "size": "10G" , "fs_type": "xfs" , "mount_point": "/home"},
-            {"name": "opt", "size": "10G" , "fs_type": "xfs" , "mount_point": "/opt"},
-            {"name": "opt-pf9", "size": "10G" , "fs_type": "xfs" , "mount_point": "/opt/pf9"},
-            {"name": "swap", "size": "3G" , "fs_type": "" , "mount_point": ""} ,
-            {"name": "tmp", "size": "10G" , "fs_type": "xfs" , "mount_point": "/tmp"},
-            {"name": "usr-openv", "size": "30G" , "fs_type": "xfs" , "mount_point": "/usr/openv"},
-            {"name": "var", "size": "20G" , "fs_type": "xfs" , "mount_point": "/var"},
-            {"name": "var-log", "size": "20G" , "fs_type": "xfs" , "mount_point": "/var/log"},
-            {"name": "var-log-audit", "size": "20G"  , "fs_type": "xfs" , "mount_point": "/var/log/audit"},
-            {"name": "var-tmp", "size": "5G" , "fs_type": "xfs" , "mount_point": "/var/tmp"},
-            {"name": "root", "size": "20G" , "fs_type": "xfs" , "mount_point": "/"}
-          ]
-        }
+          ```
+          
+       4. lv_config_template.json (in case the --storage_layout flag is set to yes)
+    
+          ```bash
+              {
+              "vg_group": "rootvg", # the name for the vg group
+              "boot_efi_size": "1G", 
+              "boot_size": "3G",
+              "volumes": [
+                {"name": "home", "size": "10G" , "fs_type": "xfs" , "mount_point": "/home"},
+                {"name": "opt", "size": "10G" , "fs_type": "xfs" , "mount_point": "/opt"},
+                {"name": "opt-pf9", "size": "10G" , "fs_type": "xfs" , "mount_point": "/opt/pf9"},
+                {"name": "swap", "size": "3G" , "fs_type": "" , "mount_point": ""} ,
+                {"name": "tmp", "size": "10G" , "fs_type": "xfs" , "mount_point": "/tmp"},
+                {"name": "usr-openv", "size": "30G" , "fs_type": "xfs" , "mount_point": "/usr/openv"},
+                {"name": "var", "size": "20G" , "fs_type": "xfs" , "mount_point": "/var"},
+                {"name": "var-log", "size": "20G" , "fs_type": "xfs" , "mount_point": "/var/log"},
+                {"name": "var-log-audit", "size": "20G"  , "fs_type": "xfs" , "mount_point": "/var/log/audit"},
+                {"name": "var-tmp", "size": "5G" , "fs_type": "xfs" , "mount_point": "/var/tmp"},
+                {"name": "root", "size": "20G" , "fs_type": "xfs" , "mount_point": "/"}
+              ]
+            }
+          ```
 
-        ```
-
-  6. Ensure the SSH key for the MAAS server user (used to connect to deployed machines during onboarding) is added in the MAAS UI.
+  7. Ensure the SSH key for the MAAS server user (used to connect to deployed machines during onboarding) is added in the MAAS UI.
         
 #### Run the script:  
 
