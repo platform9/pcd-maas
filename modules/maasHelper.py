@@ -91,28 +91,49 @@ def generate_cloud_init(template_file, output_file, ip, storage_ip):
 def create_machine(maas_user, row,logger):
     hostname = row["hostname"]
     architecture = row["architecture"]
-    mac_addresses = row["mac_addresses"]
     power_type = row["power_type"]
+    mac_addresses = row["mac_addresses"]
+    if power_type == "proxmox":
+        print(f"[{hostname}] is a proxmox VM, fetching power parameters from supplied csv.")
+        power_parameters = {
+            "power_address": row["power_address"],
+            "power_user": row["power_user"],
+            "power_pass": row["power_pass"],
+            "power_token_name": row["power_token_name"],
+            "power_verify_ssl": row["power_verify_ssl"],
+            "power_token_secret": row["power_token_secret"],
+            "power_vm_name": row["power_vm_name"]
+        }
+    else:
+        power_parameters = {
+            "power_user": row["power_user"],
+            "power_pass": row["power_pass"],
+            "power_driver": row["power_driver"],
+            "power_address": row["power_address"],
+            "cipher_suite_id": row["cipher_suite_id"],
+            "power_boot_type": row["power_boot_type"],
+            "privilege_level": row["privilege_level"],
+            "k_g": row["k_g"]
+        }
 
-    power_parameters = {
-        "power_user": row["power_user"],
-        "power_pass": row["power_pass"],
-        "power_driver": row["power_driver"],
-        "power_address": row["power_address"],
-        "cipher_suite_id": row["cipher_suite_id"],
-        "power_boot_type": row["power_boot_type"],
-        "privilege_level": row["privilege_level"],
-        "k_g": row["k_g"]
-    }
-
-    create_command = [
+    if power_type == "proxmox":
+        create_command = [
         "maas", maas_user, "machines", "create",
         f"hostname={hostname}",
         f"architecture={architecture}",
         f"mac_addresses={mac_addresses}",
         f"power_type={power_type}",
         f"power_parameters={json.dumps(power_parameters)}"
-    ]
+        ]
+    else:
+        create_command = [
+            "maas", maas_user, "machines", "create",
+            f"hostname={hostname}",
+            f"architecture={architecture}",
+            f"mac_addresses={mac_addresses}",
+            f"power_type={power_type}",
+            f"power_parameters={json.dumps(power_parameters)}"
+        ]
 
     try:
         result = subprocess.run(create_command, check=True, capture_output=True, text=True)
@@ -242,5 +263,3 @@ def save_csv(csv_file, rows, logger):
         logger.info(f"Updated CSV with deployment status at {new_csv_file}")
     except Exception as e:
         logger.error(f"Error writing to CSV: {str(e)}")
-
-
