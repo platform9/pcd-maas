@@ -116,24 +116,14 @@ def create_machine(maas_user, row,logger):
             "k_g": row["k_g"]
         }
 
-    if power_type == "proxmox":
-        create_command = [
+    create_command = [
         "maas", maas_user, "machines", "create",
         f"hostname={hostname}",
         f"architecture={architecture}",
         f"mac_addresses={mac_addresses}",
         f"power_type={power_type}",
         f"power_parameters={json.dumps(power_parameters)}"
-        ]
-    else:
-        create_command = [
-            "maas", maas_user, "machines", "create",
-            f"hostname={hostname}",
-            f"architecture={architecture}",
-            f"mac_addresses={mac_addresses}",
-            f"power_type={power_type}",
-            f"power_parameters={json.dumps(power_parameters)}"
-        ]
+    ]
 
     try:
         result = subprocess.run(create_command, check=True, capture_output=True, text=True)
